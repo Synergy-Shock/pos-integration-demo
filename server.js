@@ -55,6 +55,7 @@ const routes = [
   // Conectar con una API key pegada en la pantalla. Se valida leyendo las sucursales.
   ['POST', /^\/api\/session\/connect$/, async ({ body }) => {
     const apiKey = String(body.apiKey ?? '').trim();
+    validateOperator(body);
     if (!apiKey) throw Object.assign(new Error('Pegá una API key'), { status: 400, code: 'VALIDATION_ERROR' });
     const baseUrl = ALLOWED_BASE_URLS.includes(body.baseUrl) ? body.baseUrl : config.baseUrl;
     const candidate = new MorsisClient({ apiKey, baseUrl, onCall });
@@ -64,11 +65,17 @@ const routes = [
       throw Object.assign(new Error(`No se pudo conectar con ${baseUrl}: ${err.cause?.code ?? err.message}`), { status: 502, code: 'NETWORK_ERROR' });
     });
     Object.assign(config, { mode: 'real', apiKey, baseUrl });
-    if (body.actorUserId) config.actorUserId = String(body.actorUserId).trim();
-    if (body.externalDeviceId) config.externalDeviceId = String(body.externalDeviceId).trim();
+    applyOperator(body);
     morsis = candidate;
     sales.clear();
     return { ok: true, branches };
+  }],
+
+  // Cambiar el operador (actorUserId) o la caja sin reconectar.
+  ['POST', /^\/api\/session\/operator$/, async ({ body }) => {
+    validateOperator(body, { required: true });
+    applyOperator(body);
+    return { actorUserId: config.actorUserId, externalDeviceId: config.externalDeviceId };
   }],
 
   ['POST', /^\/api\/session\/disconnect$/, async () => {
@@ -149,6 +156,7 @@ const routes = [
 // Ejecuta un comando con la última versión conocida del pedido y guarda la nueva.
 // Ante un 409, Morsis no aplicó nada: releemos el pedido para que el cajero vea el estado real.
 async function withOrder(orderId, command) {
+  assertOperatorConfigured();
   const order = sales.get(orderId) ?? (await morsis.getOrder(orderId));
   try {
     const updated = await command(order);
@@ -161,6 +169,48 @@ async function withOrder(orderId, command) {
       err.freshOrder = fresh;
     }
     throw err;
+  }
+}
+
+// Cada comando sobre un pedido se atribuye a un usuario de Morsis (actorUserId, un UUID) y a una
+// caja de tu sistema (externalDeviceId). Si falta alguno, avisamos antes de llamar a Morsis con un
+// mensaje que diga qué dato falta, en lugar de dejar que la API responda VALIDATION_ERROR.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function operatorError(code, message) {
+  return Object.assign(new Error(message), { status: 400, code });
+}
+
+function validateOperator(body, { required = false } = {}) {
+  const actor = String(body.actorUserId ?? '').trim();
+  if (!actor && required) {
+    throw operatorError('MISSING_ACTOR_USER_ID', 'Falta el usuario operador de Morsis (actorUserId).');
+  }
+  if (actor && !UUID_RE.test(actor)) {
+    throw operatorError(
+      'INVALID_ACTOR_USER_ID',
+      `"${actor}" no es un ID de usuario de Morsis válido. Tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.`,
+    );
+  }
+  if (body.externalDeviceId !== undefined && !String(body.externalDeviceId).trim()) {
+    throw operatorError('MISSING_EXTERNAL_DEVICE_ID', 'Falta el ID de la caja (externalDeviceId).');
+  }
+}
+
+function applyOperator(body) {
+  if (body.actorUserId) config.actorUserId = String(body.actorUserId).trim();
+  if (body.externalDeviceId) config.externalDeviceId = String(body.externalDeviceId).trim();
+}
+
+function assertOperatorConfigured() {
+  if (morsis instanceof MockMorsis) return; // el Morsis simulado no valida el operador
+  if (!UUID_RE.test(config.actorUserId)) {
+    throw operatorError(
+      config.actorUserId ? 'INVALID_ACTOR_USER_ID' : 'MISSING_ACTOR_USER_ID',
+      config.actorUserId
+        ? `"${config.actorUserId}" no es un ID de usuario de Morsis válido (tiene que ser un UUID).`
+        : 'Falta el usuario operador de Morsis (actorUserId). Cargalo para poder modificar o cobrar pedidos.',
+    );
   }
 }
 

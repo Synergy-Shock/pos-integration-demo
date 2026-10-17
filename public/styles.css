@@ -263,3 +263,8 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 .success-banner.cancelled { background: var(--danger-soft); color: var(--danger); }
 .success-banner .big-icon { font-size: 28px; }
 @keyframes pop { from { transform: scale(.94); opacity: 0; } }
+
+.field-error { color: var(--danger); font-size: 12.5px; min-height: 1em; }
+.dlg .note.warn-note { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.device .missing { color: var(--danger); }
+.device { display: inline-flex; gap: 8px; align-items: center; }

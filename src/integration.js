@@ -14,7 +14,11 @@
 
 import { randomUUID } from 'node:crypto';
 
-/** Datos de auditoría que viajan en cada comando. */
+/**
+ * Datos de auditoría que viajan en cada comando.
+ * actorUserId es el UUID del usuario de Morsis creado para tus operadores (Morsis lo pide en todo
+ * comando y responde VALIDATION_ERROR si falta). Validalo al configurar tu sistema, no al cobrar.
+ */
 export function commandContext(config, order) {
   return {
     actorUserId: config.actorUserId,

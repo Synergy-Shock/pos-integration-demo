@@ -21,6 +21,9 @@ const ERROR_HELP = {
   CREDIT_NOTE_MISMATCH: 'La nota de crédito no coincide con lo devuelto.',
   UNSUPPORTED_ITEM: 'Esa línea no se puede editar por API (combo, ya enviada a cocina o con ajuste especial).',
   VALIDATION_ERROR: 'Algún dato no tiene el formato esperado.',
+  MISSING_ACTOR_USER_ID: 'Es el UUID del usuario de Morsis creado para los cajeros de tu sistema.',
+  INVALID_ACTOR_USER_ID: 'Es el UUID del usuario de Morsis creado para los cajeros de tu sistema.',
+  NETWORK_ERROR: 'Revisá tu conexión y que la URL del entorno sea la correcta.',
   UNAUTHORIZED: 'La API key es inválida o venció.',
   FORBIDDEN: 'La API key no tiene el permiso o el acceso a la sucursal necesario.',
 };
@@ -43,9 +46,40 @@ async function api(method, path, body, label) {
   return json;
 }
 
+// Nombres legibles para los campos que Morsis informa en error.details[].path.
+const FIELD_LABELS = {
+  actorUserId: 'el usuario operador de Morsis (actorUserId)',
+  externalDeviceId: 'el ID de la caja (externalDeviceId)',
+  expectedVersion: 'la versión del pedido',
+  branchId: 'la sucursal',
+  paymentCouponCode: 'el código del cupón',
+};
+
+function friendlyError(err) {
+  // Faltan datos del operador: se resuelve cargándolos, no es un error técnico.
+  if (err.code === 'MISSING_ACTOR_USER_ID' || err.code === 'INVALID_ACTOR_USER_ID') {
+    return { title: 'Falta configurar el operador', message: err.message };
+  }
+  if (err.code === 'VALIDATION_ERROR' && err.details?.length) {
+    const lines = err.details.map((d) => {
+      const field = String(d.path ?? '').split('.')[0];
+      const label = FIELD_LABELS[field] ?? `el campo ${d.path}`;
+      return /required/i.test(d.message) ? `Falta ${label}.` : `${label[0].toUpperCase()}${label.slice(1)} no tiene un formato válido (${d.message}).`;
+    });
+    return { title: 'Datos inválidos', message: lines.join(' ') };
+  }
+  return { title: err.code ?? 'Error', message: err.message };
+}
+
 function showError(err) {
+  const fieldsWithOperator = (err.details ?? []).some((d) => /^actorUserId/.test(d.path ?? ''));
+  if (['MISSING_ACTOR_USER_ID', 'INVALID_ACTOR_USER_ID'].includes(err.code) || fieldsWithOperator) {
+    openOperatorDialog(friendlyError(err).message);
+    return;
+  }
+  const { title, message } = friendlyError(err);
   const help = ERROR_HELP[err.code] ?? '';
-  toast('error', `${err.code ?? 'Error'}`, `${esc(err.message)}${help ? `<br>${esc(help)}` : ''}${err.requestId ? `<br><code>X-Request-Id ${esc(err.requestId)}</code>` : ''}`);
+  toast('error', title, `${esc(message)}${help ? `<br>${esc(help)}` : ''}${err.requestId ? `<br><code>X-Request-Id ${esc(err.requestId)}</code>` : ''}`);
   // Ante un 409 el backend nos manda el pedido releído: lo mostramos.
   if (err.payload?.order) setOrder(err.payload.order, { flash: true });
 }
@@ -82,7 +116,7 @@ async function init() {
   const badge = $('#mode-badge');
   badge.textContent = config.mode === 'mock' ? 'MODO DEMO · Morsis simulado' : `MODO REAL · ${config.baseUrl}`;
   badge.className = `badge ${config.mode}`;
-  $('#device-label').textContent = `Caja: ${config.externalDeviceId}`;
+  renderDeviceLabel();
   const connectBtn = $('#connect-btn');
   connectBtn.textContent = config.mode === 'real' ? 'Desconectar' : 'Conectar con API key';
   connectBtn.addEventListener('click', () => (state.config.mode === 'real' ? disconnect() : openConnectDialog()));
@@ -589,6 +623,67 @@ function openCancelDialog() {
   dlg.showModal();
 }
 
+// ------------------------------------------------------------------ operador y caja
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function renderDeviceLabel() {
+  const { externalDeviceId, actorUserId, mode } = state.config;
+  const el = $('#device-label');
+  if (mode !== 'real') {
+    el.textContent = `Caja: ${externalDeviceId}`;
+    return;
+  }
+  el.innerHTML = `Caja: ${esc(externalDeviceId)} · Operador: ${actorUserId ? esc(actorUserId.slice(0, 8)) + '…' : '<b class="missing">sin configurar</b>'}
+    <button class="btn ghost small" id="operator-btn" type="button">Cambiar</button>`;
+  $('#operator-btn').addEventListener('click', () => openOperatorDialog());
+}
+
+// Pide el usuario operador (actorUserId) y la caja. Se abre sola si un comando lo necesita.
+function openOperatorDialog(reason = '') {
+  const dlg = $('#dialog');
+  if (dlg.open) dlg.close();
+  dlg.innerHTML = `<form class="dlg" autocomplete="off">
+    <h3>Operador de Morsis</h3>
+    ${reason ? `<div class="note warn-note">${esc(reason)}</div>` : ''}
+    <div class="note">Morsis registra quién hizo cada cambio o cobro. Usá el UUID del usuario de Morsis creado
+      para los cajeros de tu sistema (lo ve el comercio en Morsis, en la ficha del usuario).</div>
+    <label class="field">Usuario operador (actorUserId)
+      <input name="actorUserId" required placeholder="09af74bb-63d8-47f2-8849-d66fe2b98f37" value="${esc(state.config.actorUserId || '')}" />
+      <span class="field-error" id="actor-error"></span>
+    </label>
+    <label class="field">ID de tu caja (externalDeviceId)<input name="externalDeviceId" required value="${esc(state.config.externalDeviceId)}" /></label>
+    <div class="buttons">
+      <button type="button" class="btn ghost" id="dlg-close">Cancelar</button>
+      <button type="submit" class="btn primary">Guardar</button>
+    </div>
+  </form>`;
+  const input = dlg.querySelector('[name=actorUserId]');
+  const errorEl = dlg.querySelector('#actor-error');
+  input.addEventListener('input', () => (errorEl.textContent = ''));
+  dlg.querySelector('#dlg-close').addEventListener('click', () => dlg.close());
+  dlg.querySelector('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const body = Object.fromEntries(new FormData(e.target));
+    body.actorUserId = body.actorUserId.trim();
+    if (!UUID_RE.test(body.actorUserId)) {
+      errorEl.textContent = 'Tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.';
+      return input.focus();
+    }
+    try {
+      const res = await api('POST', '/api/session/operator', body, 'Configurar operador');
+      Object.assign(state.config, res);
+      renderDeviceLabel();
+      dlg.close();
+      toast('success', 'Operador guardado', 'Ya podés repetir la acción.');
+    } catch (err) {
+      errorEl.textContent = friendlyError(err).message;
+    }
+  });
+  dlg.showModal();
+  input.focus();
+}
+
 // ------------------------------------------------------------------ conectar con una API key
 
 function openConnectDialog() {
@@ -618,7 +713,8 @@ function openConnectDialog() {
     </label>
     <label class="field">API key<input name="apiKey" type="password" placeholder="mk_live_…" required /></label>
     <label class="field">Usuario operador en Morsis (actorUserId)
-      <input name="actorUserId" placeholder="uuid del usuario creado para tus cajeros" value="${esc(state.config.actorUserId || '')}" />
+      <input name="actorUserId" required placeholder="09af74bb-63d8-47f2-8849-d66fe2b98f37" value="${esc(state.config.actorUserId || '')}" />
+      <span class="field-error" id="actor-error"></span>
     </label>
     <label class="field">ID de tu caja (externalDeviceId)<input name="externalDeviceId" value="${esc(state.config.externalDeviceId)}" /></label>
     <div class="buttons">
@@ -630,6 +726,14 @@ function openConnectDialog() {
   dlg.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
+    const actor = String(form.get('actorUserId')).trim();
+    if (!UUID_RE.test(actor)) {
+      dlg.querySelector('#actor-error').textContent = actor
+        ? 'Tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.'
+        : 'Falta el usuario operador. Sin él, Morsis no deja modificar ni cobrar pedidos.';
+      return dlg.querySelector('[name=actorUserId]').focus();
+    }
+    form.set('actorUserId', actor);
     const btn = dlg.querySelector('#connect-submit');
     btn.disabled = true;
     btn.textContent = 'Probando la key…';
