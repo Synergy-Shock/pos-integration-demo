@@ -11,6 +11,11 @@ App mínima de referencia para integrar un **sistema de cobro externo (POS)** co
 
 La idea es que la uses como base: el código está separado en capas para que copies solo lo que te sirve.
 
+> **¿Vas a integrar tu propio sistema?**
+> - Programadores: [Guía de integración](docs/GUIA-INTEGRACION.md), paso a paso, sin depender de Node.js.
+> - Asistentes de IA (LLM): [`AGENTS.md`](AGENTS.md), la misma guía escrita como especificación, con
+>   invariantes y criterios de aceptación. También hay un [`llms.txt`](llms.txt) que indexa el repo.
+
 ![Pedido importado desde un cupón](docs/pedido-importado.png)
 
 ---
@@ -264,6 +269,8 @@ Lo que Morsis **no** hace en este flujo: no cobra, no mueve plata y no emite com
 Todo eso lo hace tu sistema; Morsis solo lo registra.
 
 ## Referencias
+
+- Guía para integrar otro sistema: [docs/GUIA-INTEGRACION.md](docs/GUIA-INTEGRACION.md) · para LLMs: [AGENTS.md](AGENTS.md)
 
 - Documentación y consola interactiva: https://api.morsis.com/docs
 - Especificación OpenAPI: https://api.morsis.com/v1/openapi.yaml

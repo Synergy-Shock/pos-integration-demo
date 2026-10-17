@@ -1,0 +1,24 @@
+# POS de ejemplo integrado con Morsis
+
+> Demo en Node.js de un sistema externo (caja/POS) que cobra pedidos de Morsis a partir del cupón de pago: busca el pedido, lo carga como venta, permite quitar productos y cambiar cantidades, e informa a Morsis el cobro con factura, devoluciones y anulaciones con nota de crédito. Sirve de referencia para implementar la misma integración en otro sistema.
+
+Si vas a implementar la integración en otro sistema, leé primero AGENTS.md: tiene las invariantes, los payloads y los criterios de aceptación.
+
+## Guías
+
+- [AGENTS.md](AGENTS.md): especificación para un asistente de IA que implementa la integración
+- [Guía de integración](docs/GUIA-INTEGRACION.md): la misma guía, explicada para programadores
+- [README](README.md): cómo correr el demo y el flujo con ejemplos HTTP
+
+## Código de referencia
+
+- [Cliente de la API](src/morsis-client.js): auth, Idempotency-Key, 429 y errores
+- [Flujo de negocio](src/integration.js): importar, editar, cobrar, devolver y anular
+- [Test del flujo](test/flow.test.js)
+- [Morsis simulado](src/mock-morsis.js)
+
+## API de Morsis
+
+- [OpenAPI](https://api.morsis.com/v1/openapi.yaml): fuente de verdad
+- [Guía oficial para agentes](https://api.morsis.com/docs/agents.md)
+- [Documentación interactiva](https://api.morsis.com/docs)
