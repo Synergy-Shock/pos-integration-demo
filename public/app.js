@@ -628,13 +628,13 @@ function openCancelDialog() {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function renderDeviceLabel() {
+  // Caja y cajero se pueden cambiar en cualquier momento (en modo demo, Morsis simulado no los valida).
   const { externalDeviceId, actorUserId, mode } = state.config;
   const el = $('#device-label');
-  if (mode !== 'real') {
-    el.textContent = `Caja: ${externalDeviceId}`;
-    return;
-  }
-  el.innerHTML = `Caja: ${esc(externalDeviceId)} · Operador: ${actorUserId ? esc(actorUserId.slice(0, 8)) + '…' : '<b class="missing">sin configurar</b>'}
+  const operator = actorUserId
+    ? `<span title="${esc(actorUserId)}">${esc(actorUserId.slice(0, 8))}…</span>`
+    : mode === 'real' ? '<b class="missing">sin configurar</b>' : 'demo';
+  el.innerHTML = `Caja: ${esc(externalDeviceId)} · Cajero: ${operator}
     <button class="btn ghost small" id="operator-btn" type="button">Cambiar</button>`;
   $('#operator-btn').addEventListener('click', () => openOperatorDialog());
 }
@@ -644,7 +644,7 @@ function openOperatorDialog(reason = '') {
   const dlg = $('#dialog');
   if (dlg.open) dlg.close();
   dlg.innerHTML = `<form class="dlg" autocomplete="off">
-    <h3>Operador de Morsis</h3>
+    <h3>Cajero y caja</h3>
     ${reason ? `<div class="note warn-note">${esc(reason)}</div>` : ''}
     <div class="note">Morsis registra quién hizo cada cambio o cobro. Usá el UUID del usuario de Morsis creado
       para los cajeros de tu sistema (lo ve el comercio en Morsis, en la ficha del usuario).</div>

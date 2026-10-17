@@ -46,7 +46,7 @@ const routes = [
     baseUrl: config.mode === 'real' ? config.baseUrl : 'simulado en memoria',
     branchId: config.branchId,
     externalDeviceId: config.externalDeviceId,
-    actorUserId: config.mode === 'real' ? config.actorUserId : '',
+    actorUserId: config.actorUserId,
     canConnect: true,
     invoice: config.invoice,
     sampleCoupons: config.mode === 'mock' ? ['012345678', '000000777', '123456789'] : [],

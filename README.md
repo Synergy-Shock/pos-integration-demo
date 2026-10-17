@@ -43,6 +43,9 @@ npm test   # recorre el flujo completo contra el Morsis simulado
    `orders:refund_external` y `payment_methods:read`, y acceso a la sucursal.
 2. Pedí también el **usuario de Morsis** creado para tus operadores (`actorUserId`). Tiene que tener
    `orders:edit` para cobrar y `orders:void` para devolver o anular.
+   La API pública no tiene un método para listar usuarios, así que este UUID lo pasa el comercio
+   desde Morsis. En la app se carga en **Cajero y caja** (botón "Cambiar" del encabezado), junto con
+   el ID de la caja, y se puede cambiar en cualquier momento.
 3. Copiá `.env.example` a `.env` y completalo:
 
    ```bash
