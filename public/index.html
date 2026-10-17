@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
+  <div class="top-progress" aria-hidden="true"></div>
   <header class="topbar">
     <div class="brand">
       <span class="brand-logo">▣</span>
@@ -65,7 +66,10 @@
             <h2 id="sale-title">Pedido</h2>
             <div class="sale-sub" id="sale-sub"></div>
           </div>
-          <div class="status-badges" id="status-badges"></div>
+          <div class="sale-head-side">
+            <div class="status-badges" id="status-badges"></div>
+            <div class="sale-progress" id="sale-progress" role="status" aria-live="polite"></div>
+          </div>
         </div>
 
         <div class="customer" id="customer"></div>

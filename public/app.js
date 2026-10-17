@@ -92,17 +92,27 @@ function toast(kind, title, html = '') {
   setTimeout(() => el.remove(), kind === 'error' ? 9000 : 4500);
 }
 
-async function busy(fn) {
+// Ejecuta una acción mostrando que se está aplicando en Morsis: barra de progreso arriba,
+// un aviso en la venta, la línea o el botón tocado con su spinner, y el resto de los controles
+// bloqueados hasta que llega la respuesta (así no se mandan dos cambios con la misma versión).
+async function busy(fn, { label = 'Aplicando en Morsis…', row, button } = {}) {
   if (state.busy) return;
   state.busy = true;
-  document.body.style.cursor = 'progress';
+  document.body.classList.add('is-busy');
+  $('#sale').classList.add('applying');
+  $('#sale-progress').textContent = label;
+  row?.classList.add('pending');
+  button?.classList.add('loading');
   try {
     return await fn();
   } catch (err) {
     showError(err);
   } finally {
     state.busy = false;
-    document.body.style.cursor = '';
+    document.body.classList.remove('is-busy');
+    $('#sale').classList.remove('applying');
+    row?.classList.remove('pending');
+    button?.classList.remove('loading');
   }
 }
 
@@ -395,30 +405,31 @@ $('#ticket-lines').addEventListener('click', (e) => {
   const item = state.order.items.find((i) => i.lineItemId === lineItemId);
   const id = state.order.id;
 
+  const removing = btn.dataset.act === 'remove' || (btn.dataset.act === 'minus' && item.quantity === 1);
+  const quantity = item.quantity + (btn.dataset.act === 'plus' ? 1 : -1);
+  const label = removing ? `Quitando "${item.name}" en Morsis…` : `Cambiando la cantidad a ${quantity} en Morsis…`;
+
   busy(async () => {
-    if (btn.dataset.act === 'remove' || (btn.dataset.act === 'minus' && item.quantity === 1)) {
+    if (removing) {
+      const res = await api('POST', `/api/sales/${id}/remove-line`, { lineItemId }, `Quitar "${item.name}"`);
+      // Confirmado por Morsis: recién ahora animamos la salida de la línea.
       tr.classList.add('leaving');
-      try {
-        const res = await api('POST', `/api/sales/${id}/remove-line`, { lineItemId }, `Quitar "${item.name}"`);
-        setOrder(res.order);
-        toast('info', 'Producto quitado', `${esc(item.name)} se quitó del pedido en Morsis. Nuevo total ${fmt(res.order.totalCents)}.`);
-      } catch (err) {
-        tr.classList.remove('leaving');
-        throw err;
-      }
+      await new Promise((r) => setTimeout(r, 300));
+      setOrder(res.order);
+      toast('info', 'Producto quitado', `${esc(item.name)} se quitó del pedido en Morsis. Nuevo total ${fmt(res.order.totalCents)}.`);
     } else {
-      const quantity = item.quantity + (btn.dataset.act === 'plus' ? 1 : -1);
       const res = await api('POST', `/api/sales/${id}/set-quantity`, { lineItemId, quantity }, `Cantidad de "${item.name}" → ${quantity}`);
       setOrder(res.order);
       document.querySelector(`tr[data-line="${lineItemId}"]`)?.classList.add('flash');
     }
-  });
+  }, { label, row: tr, button: btn });
 });
 
 // ------------------------------------------------------------------ acciones
 
 $('#actions').addEventListener('click', (e) => {
-  const act = e.target.closest('button[data-act]')?.dataset.act;
+  const button = e.target.closest('button[data-act]');
+  const act = button?.dataset.act;
   if (!act) return;
   const id = state.order?.id;
   if (act === 'pay') return openPayDialog();
@@ -428,12 +439,12 @@ $('#actions').addEventListener('click', (e) => {
     return busy(async () => {
       const res = await api('GET', `/api/sales/${id}`, null, 'Releer pedido');
       setOrder(res.order, { flash: true });
-    });
+    }, { label: 'Releyendo el pedido de Morsis…', button });
   if (act === 'concurrent')
     return busy(async () => {
       await api('POST', `/api/mock/sales/${id}/concurrent-edit`, {}, 'Simular cambio en Morsis');
       toast('info', 'Listo', 'Alguien "editó" el pedido en Morsis. El próximo cambio que hagas va a recibir un 409 ORDER_VERSION_CONFLICT.');
-    });
+    }, { label: 'Simulando un cambio en Morsis…', button });
   if (act === 'discard' || act === 'new') {
     state.order = null;
     $('#sale').classList.add('hidden');
@@ -524,7 +535,7 @@ function openPayDialog() {
       const res = await api('POST', `/api/sales/${order.id}/complete`, { payments }, `Cobrar ${fmt(order.totalCents)}`);
       setOrder(res.order);
       toast('success', '¡Venta cobrada!', 'Morsis registró el cobro externo y la factura.');
-    });
+    }, { label: 'Registrando el cobro y la factura en Morsis…', button: $('#actions [data-act=pay]') });
   });
   update();
   dlg.showModal();
@@ -591,7 +602,7 @@ function openRefundDialog() {
       const res = await api('POST', `/api/sales/${order.id}/refund`, body, 'Devolución parcial');
       setOrder(res.order);
       toast('success', 'Devolución registrada', `Nota de crédito informada a Morsis.`);
-    });
+    }, { label: 'Registrando la devolución en Morsis…', button: $('#actions [data-act=refund]') });
   });
   update(false);
   dlg.showModal();
@@ -620,7 +631,7 @@ function openCancelDialog() {
       const res = await api('POST', `/api/sales/${order.id}/cancel`, { reason }, 'Anular venta');
       setOrder(res.order);
       toast('success', 'Venta anulada', 'Morsis canceló el pedido.');
-    });
+    }, { label: 'Anulando la venta en Morsis…', button: $('#actions [data-act=cancel]') });
   });
   dlg.showModal();
 }
