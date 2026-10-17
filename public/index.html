@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>POS de ejemplo · Integración Morsis</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-logo">▣</span>
+      <div>
+        <strong>Mi POS</strong>
+        <small>Sistema externo de ejemplo integrado con Morsis</small>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <span id="mode-badge" class="badge">…</span>
+      <button class="btn small" id="connect-btn" type="button">Conectar con API key</button>
+      <label class="branch">
+        Sucursal
+        <select id="branch-select"></select>
+      </label>
+      <span class="device" id="device-label"></span>
+    </div>
+  </header>
+
+  <ol class="stepper" id="stepper">
+    <li data-step="scan"><span>1</span>Escanear cupón</li>
+    <li data-step="import"><span>2</span>Importar pedido</li>
+    <li data-step="edit"><span>3</span>Ajustar productos</li>
+    <li data-step="pay"><span>4</span>Cobrar y facturar</li>
+    <li data-step="after"><span>5</span>Devolución / anulación</li>
+  </ol>
+
+  <main class="layout">
+    <section class="pos">
+      <!-- Paso 1: escaneo del cupón -->
+      <div class="card scanner" id="scanner">
+        <div class="coupon">
+          <div class="coupon-head">
+            <span>Cupón de pago</span>
+            <small>Morsis</small>
+          </div>
+          <div class="barcode" id="barcode" aria-hidden="true"></div>
+          <form id="scan-form" class="scan-form" autocomplete="off">
+            <input id="coupon-input" inputmode="numeric" pattern="[0-9]*" maxlength="32"
+                   placeholder="Escaneá o tipeá el código" aria-label="Código del cupón de pago" />
+            <button class="btn primary" type="submit" id="scan-btn">Buscar pedido</button>
+          </form>
+        </div>
+        <div class="scanner-help">
+          <p>El cajero escanea el código de barras del cupón. El POS busca el pedido en Morsis con
+            <code>GET /orders?paymentCouponCode=…&amp;branchId=…</code> y lo carga como una venta propia.</p>
+          <div id="sample-coupons" class="chips"></div>
+        </div>
+      </div>
+
+      <!-- Paso 2 en adelante: la venta -->
+      <div class="card sale hidden" id="sale">
+        <div class="sale-head">
+          <div>
+            <div class="eyebrow">Venta importada desde Morsis</div>
+            <h2 id="sale-title">Pedido</h2>
+            <div class="sale-sub" id="sale-sub"></div>
+          </div>
+          <div class="status-badges" id="status-badges"></div>
+        </div>
+
+        <div class="customer" id="customer"></div>
+
+        <table class="ticket">
+          <thead>
+            <tr><th>Producto</th><th class="num">Cant.</th><th class="num">Unitario</th><th class="num">Total</th><th></th></tr>
+          </thead>
+          <tbody id="ticket-lines"></tbody>
+        </table>
+
+        <div class="totals" id="totals"></div>
+
+        <div class="docs" id="docs"></div>
+
+        <div class="actions" id="actions"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <div class="card log">
+        <div class="log-head">
+          <h3>Llamadas a la API de Morsis</h3>
+          <button class="btn ghost small" id="clear-log">Limpiar</button>
+        </div>
+        <p class="muted small">Cada acción del POS y lo que se mandó y recibió. Tocá una llamada para ver el detalle.</p>
+        <ul id="log-list" class="log-list"></ul>
+      </div>
+      <details class="card raw" id="raw-order">
+        <summary>JSON del pedido (tal cual lo devuelve Morsis)</summary>
+        <pre id="raw-json">Todavía no hay pedido cargado.</pre>
+      </details>
+    </aside>
+  </main>
+
+  <dialog id="dialog"></dialog>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
