@@ -28,7 +28,8 @@ export const config = {
   // Sin API key, la demo usa el Morsis simulado.
   mode: env.MORSIS_API_KEY ? 'real' : 'mock',
   branchId: env.MORSIS_BRANCH_ID || '',
-  actorUserId: env.MORSIS_ACTOR_USER_ID || '', // el modo demo no lo valida; en modo real es obligatorio
+  actorUserId: env.MORSIS_ACTOR_USER_ID || '',
+  actorName: '', // el modo demo no lo valida; en modo real es obligatorio
   externalDeviceId: env.EXTERNAL_DEVICE_ID || 'CAJA-1',
   invoice: {
     issuerTaxId: env.INVOICE_ISSUER_TAX_ID || '30712345678',

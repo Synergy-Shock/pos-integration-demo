@@ -49,6 +49,25 @@ export class MorsisClient {
   }
 
   /**
+   * GET /team/members: usuarios del equipo del comercio (requiere el scope `team:read`).
+   * Recorre todas las páginas. Usá `userId` (no `id`) como actorUserId en los comandos.
+   * Un miembro con `branchIds: null` tiene acceso a todas las sucursales.
+   */
+  async listTeamMembers({ query } = {}) {
+    const members = [];
+    let cursor = null;
+    do {
+      const params = new URLSearchParams({ limit: '100' });
+      if (query) params.set('query', query);
+      if (cursor) params.set('cursor', cursor);
+      const res = await this.#request('GET', `/team/members?${params}`);
+      members.push(...res.data);
+      cursor = res.meta?.hasMore ? res.meta.cursor : null;
+    } while (cursor);
+    return members;
+  }
+
+  /**
    * GET /orders?paymentCouponCode=&branchId=
    * Busca el pedido de un cupón de pago. Devuelve el pedido o null si el cupón no existe.
    * El código se manda como string para conservar los ceros a la izquierda.

@@ -77,3 +77,13 @@ test('idempotencia: reintento con la misma key devuelve lo mismo', async () => {
   assert.equal(b.payments.length, 1);
   await assert.rejects(morsis.completeOrderExternally(order.id, { ...sameBody, reason: 'otro' }), { code: 'IDEMPOTENCY_CONFLICT' });
 });
+
+test('cajeros: solo los que tienen acceso a la sucursal', async () => {
+  const morsis = new MockMorsis();
+  const centro = await integration.listCashiers(morsis, BRANCH);
+  const names = centro.map((m) => m.name);
+  assert.ok(names.includes('Sofía Ramírez'));
+  assert.ok(names.includes('Carla Fernández')); // branchIds null = todas las sucursales
+  assert.ok(!names.includes('Diego Torres')); // solo Palermo
+  assert.match(centro[0].userId, /^[0-9a-f-]{36}$/);
+});

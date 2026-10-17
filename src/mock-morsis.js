@@ -17,6 +17,17 @@ const BRANCHES = [
   { id: '56565656-5656-4565-8565-565656565656', name: 'Sucursal Palermo', displayName: 'El Gauchito Palermo' },
 ];
 
+const TEAM = [
+  member('Sofía Ramírez', 'sofia@elgauchito.com.ar', 'Cajero', 'Caja principal', [BRANCHES[0].id]),
+  member('Martín López', 'martin@elgauchito.com.ar', 'Cajero', 'Turno noche', [BRANCHES[0].id, BRANCHES[1].id]),
+  member('Carla Fernández', 'carla@elgauchito.com.ar', 'Encargada', 'Encargada de local', null),
+  member('Diego Torres', 'diego@elgauchito.com.ar', 'Cajero', null, [BRANCHES[1].id]),
+];
+
+function member(name, email, role, jobTitle, branchIds) {
+  return { id: randomUUID(), userId: randomUUID(), name, email, role, roleId: randomUUID(), jobTitle, branchIds, joinedAt: '2026-03-02T12:00:00.000Z' };
+}
+
 const PAYMENT_METHODS = [
   { id: 'cash', name: 'Efectivo', requiredFields: ['reference'] },
   { id: 'debit_card', name: 'Tarjeta de débito', requiredFields: ['reference'] },
@@ -179,6 +190,15 @@ export class MockMorsis {
 
   async listBranches() {
     return this.#call('GET', '/branches', {}, () => ({ data: clone(BRANCHES) })).data;
+  }
+
+  async listTeamMembers({ query } = {}) {
+    const path = `/team/members?${new URLSearchParams({ limit: '100', ...(query ? { query } : {}) })}`;
+    return this.#call('GET', path, {}, () => {
+      const q = (query ?? '').toLowerCase();
+      const data = TEAM.filter((m) => !q || `${m.name} ${m.email}`.toLowerCase().includes(q));
+      return { data: clone(data), meta: { cursor: null, hasMore: false } };
+    }).data;
   }
 
   async listPaymentMethods() {

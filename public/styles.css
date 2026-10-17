@@ -268,3 +268,16 @@ dialog::backdrop { background: rgba(10, 12, 16, .55); }
 .dlg .note.warn-note { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
 .device .missing { color: var(--danger); }
 .device { display: inline-flex; gap: 8px; align-items: center; }
+
+.member-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow: auto; }
+.member {
+  display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; font: inherit; color: var(--text);
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 10px; cursor: pointer;
+}
+.member:hover { border-color: var(--accent); }
+.member.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent-soft); }
+.member .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); border: 1px solid var(--border); font-weight: 700; flex-shrink: 0; }
+.member .who { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.member .who small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#manual-actor summary { cursor: pointer; color: var(--muted); }
+#manual-actor[open] summary { margin-bottom: 8px; }

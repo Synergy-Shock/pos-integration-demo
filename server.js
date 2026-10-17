@@ -47,6 +47,7 @@ const routes = [
     branchId: config.branchId,
     externalDeviceId: config.externalDeviceId,
     actorUserId: config.actorUserId,
+    actorName: config.actorName,
     canConnect: true,
     invoice: config.invoice,
     sampleCoupons: config.mode === 'mock' ? ['012345678', '000000777', '123456789'] : [],
@@ -75,7 +76,7 @@ const routes = [
   ['POST', /^\/api\/session\/operator$/, async ({ body }) => {
     validateOperator(body, { required: true });
     applyOperator(body);
-    return { actorUserId: config.actorUserId, externalDeviceId: config.externalDeviceId };
+    return { actorUserId: config.actorUserId, actorName: config.actorName, externalDeviceId: config.externalDeviceId };
   }],
 
   ['POST', /^\/api\/session\/disconnect$/, async () => {
@@ -86,6 +87,22 @@ const routes = [
   }],
 
   ['GET', /^\/api\/branches$/, async () => ({ branches: await morsis.listBranches() })],
+
+  // Cajeros para elegir el actorUserId. Si la key no tiene `team:read`, la UI ofrece cargarlo a mano.
+  ['GET', /^\/api\/team-members$/, async ({ query }) => {
+    try {
+      return { available: true, members: await integration.listCashiers(morsis, query.get('branchId') || config.branchId) };
+    } catch (err) {
+      if (err instanceof MorsisApiError && (err.status === 403 || err.status === 404)) {
+        return {
+          available: false,
+          members: [],
+          reason: 'La API key no puede leer el equipo (le falta el permiso team:read). Pedile al comercio que lo agregue, o ingresá el ID de usuario a mano.',
+        };
+      }
+      throw err;
+    }
+  }],
 
   ['GET', /^\/api\/payment-methods$/, async () => ({ methods: await morsis.listPaymentMethods() })],
 
@@ -198,7 +215,10 @@ function validateOperator(body, { required = false } = {}) {
 }
 
 function applyOperator(body) {
-  if (body.actorUserId) config.actorUserId = String(body.actorUserId).trim();
+  if (body.actorUserId) {
+    config.actorUserId = String(body.actorUserId).trim();
+    config.actorName = String(body.actorName ?? '').trim();
+  }
   if (body.externalDeviceId) config.externalDeviceId = String(body.externalDeviceId).trim();
 }
 
@@ -209,7 +229,7 @@ function assertOperatorConfigured() {
       config.actorUserId ? 'INVALID_ACTOR_USER_ID' : 'MISSING_ACTOR_USER_ID',
       config.actorUserId
         ? `"${config.actorUserId}" no es un ID de usuario de Morsis válido (tiene que ser un UUID).`
-        : 'Falta el usuario operador de Morsis (actorUserId). Cargalo para poder modificar o cobrar pedidos.',
+        : 'Falta elegir el cajero (actorUserId). Elegilo para poder modificar o cobrar pedidos.',
     );
   }
 }

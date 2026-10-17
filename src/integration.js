@@ -27,6 +27,19 @@ export function commandContext(config, order) {
   };
 }
 
+// ------------------------------------------------------------------ 0. cajeros
+
+/**
+ * Cajeros que pueden operar en una sucursal: miembros del equipo con acceso a ella
+ * (branchIds null = todas las sucursales). Guardá el `userId` elegido como actorUserId.
+ */
+export async function listCashiers(morsis, branchId) {
+  const members = await morsis.listTeamMembers();
+  return members
+    .filter((m) => m.branchIds === null || !branchId || m.branchIds.includes(branchId))
+    .sort((a, b) => (a.name ?? a.email).localeCompare(b.name ?? b.email, 'es'));
+}
+
 // ------------------------------------------------------------------ 1. cupón → venta
 
 /**

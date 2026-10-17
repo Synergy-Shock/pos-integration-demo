@@ -153,6 +153,8 @@ async function init() {
 
   renderBarcode('');
   renderStepper();
+  // Recién conectado en modo real y sin cajero elegido: lo pedimos de entrada.
+  if (config.mode === 'real' && !config.actorUserId) openOperatorDialog();
   $('#coupon-input').addEventListener('input', (e) => {
     e.target.value = e.target.value.replace(/\D/g, '');
     renderBarcode(e.target.value);
@@ -629,59 +631,116 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
 function renderDeviceLabel() {
   // Caja y cajero se pueden cambiar en cualquier momento (en modo demo, Morsis simulado no los valida).
-  const { externalDeviceId, actorUserId, mode } = state.config;
+  const { externalDeviceId, actorUserId, actorName, mode } = state.config;
   const el = $('#device-label');
   const operator = actorUserId
-    ? `<span title="${esc(actorUserId)}">${esc(actorUserId.slice(0, 8))}…</span>`
-    : mode === 'real' ? '<b class="missing">sin configurar</b>' : 'demo';
+    ? `<span title="${esc(actorUserId)}">${esc(actorName || actorUserId.slice(0, 8) + '…')}</span>`
+    : mode === 'real' ? '<b class="missing">sin elegir</b>' : 'demo';
   el.innerHTML = `Caja: ${esc(externalDeviceId)} · Cajero: ${operator}
     <button class="btn ghost small" id="operator-btn" type="button">Cambiar</button>`;
   $('#operator-btn').addEventListener('click', () => openOperatorDialog());
 }
 
-// Pide el usuario operador (actorUserId) y la caja. Se abre sola si un comando lo necesita.
-function openOperatorDialog(reason = '') {
+// Elegir el cajero (actorUserId) y la caja. Los cajeros salen de GET /team/members; si la key no
+// tiene el scope team:read, se puede pegar el UUID a mano. Se abre sola si un comando lo necesita.
+async function openOperatorDialog(reason = '') {
   const dlg = $('#dialog');
   if (dlg.open) dlg.close();
   dlg.innerHTML = `<form class="dlg" autocomplete="off">
     <h3>Cajero y caja</h3>
     ${reason ? `<div class="note warn-note">${esc(reason)}</div>` : ''}
-    <div class="note">Morsis registra quién hizo cada cambio o cobro. Usá el UUID del usuario de Morsis creado
-      para los cajeros de tu sistema (lo ve el comercio en Morsis, en la ficha del usuario).</div>
-    <label class="field">Usuario operador (actorUserId)
-      <input name="actorUserId" required placeholder="09af74bb-63d8-47f2-8849-d66fe2b98f37" value="${esc(state.config.actorUserId || '')}" />
-      <span class="field-error" id="actor-error"></span>
+    <div class="note">Morsis registra qué usuario hizo cada cambio o cobro. Elegí el usuario del equipo de Morsis
+      que opera esta caja.</div>
+    <label class="field">Cajero
+      <input id="member-search" type="search" placeholder="Buscar por nombre o email" />
     </label>
+    <div class="member-list" id="member-list"><div class="skeleton"></div><div class="skeleton"></div></div>
+    <details id="manual-actor">
+      <summary class="small">Ingresar el ID de usuario a mano</summary>
+      <label class="field">ID de usuario de Morsis (actorUserId)
+        <input name="actorUserId" placeholder="09af74bb-63d8-47f2-8849-d66fe2b98f37" value="${esc(state.config.actorUserId || '')}" />
+      </label>
+    </details>
+    <span class="field-error" id="actor-error"></span>
     <label class="field">ID de tu caja (externalDeviceId)<input name="externalDeviceId" required value="${esc(state.config.externalDeviceId)}" /></label>
     <div class="buttons">
       <button type="button" class="btn ghost" id="dlg-close">Cancelar</button>
       <button type="submit" class="btn primary">Guardar</button>
     </div>
   </form>`;
-  const input = dlg.querySelector('[name=actorUserId]');
+  const listEl = dlg.querySelector('#member-list');
+  const manual = dlg.querySelector('[name=actorUserId]');
   const errorEl = dlg.querySelector('#actor-error');
-  input.addEventListener('input', () => (errorEl.textContent = ''));
+  let selected = state.config.actorUserId ? { userId: state.config.actorUserId, name: state.config.actorName } : null;
+  let members = [];
+
+  const renderMembers = () => {
+    const q = dlg.querySelector('#member-search').value.trim().toLowerCase();
+    const shown = members.filter((m) => !q || `${m.name ?? ''} ${m.email}`.toLowerCase().includes(q));
+    listEl.innerHTML = shown.length
+      ? shown.map((m) => `<button type="button" class="member ${selected?.userId === m.userId ? 'selected' : ''}" data-user="${esc(m.userId)}">
+          <span class="avatar">${esc((m.name || m.email).trim()[0]?.toUpperCase() ?? '?')}</span>
+          <span class="who"><b>${esc(m.name || m.email)}</b><small>${esc(m.email)}</small></span>
+          <span class="badge">${esc(m.jobTitle || m.role)}</span>
+        </button>`).join('')
+      : `<div class="muted small">${members.length ? 'Ningún cajero coincide con la búsqueda.' : 'No hay usuarios del equipo con acceso a esta sucursal.'}</div>`;
+  };
+  listEl.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-user]');
+    if (!btn) return;
+    const m = members.find((x) => x.userId === btn.dataset.user);
+    selected = { userId: m.userId, name: m.name || m.email };
+    manual.value = m.userId;
+    errorEl.textContent = '';
+    renderMembers();
+  });
+  manual.addEventListener('input', () => {
+    selected = null;
+    errorEl.textContent = '';
+    renderMembers();
+  });
+  dlg.querySelector('#member-search').addEventListener('input', renderMembers);
   dlg.querySelector('#dlg-close').addEventListener('click', () => dlg.close());
   dlg.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
-    const body = Object.fromEntries(new FormData(e.target));
-    body.actorUserId = body.actorUserId.trim();
-    if (!UUID_RE.test(body.actorUserId)) {
-      errorEl.textContent = 'Tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.';
-      return input.focus();
+    const actorUserId = (selected?.userId ?? manual.value).trim();
+    if (!UUID_RE.test(actorUserId)) {
+      errorEl.textContent = actorUserId
+        ? 'El ID de usuario tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.'
+        : 'Elegí un cajero de la lista.';
+      return;
     }
+    const body = {
+      actorUserId,
+      actorName: selected?.userId === actorUserId ? selected.name ?? '' : '',
+      externalDeviceId: dlg.querySelector('[name=externalDeviceId]').value.trim(),
+    };
     try {
-      const res = await api('POST', '/api/session/operator', body, 'Configurar operador');
+      const res = await api('POST', '/api/session/operator', body, 'Elegir cajero');
       Object.assign(state.config, res);
       renderDeviceLabel();
       dlg.close();
-      toast('success', 'Operador guardado', 'Ya podés repetir la acción.');
+      toast('success', 'Cajero guardado', `${esc(res.actorName || res.actorUserId)} · caja ${esc(res.externalDeviceId)}.`);
     } catch (err) {
       errorEl.textContent = friendlyError(err).message;
     }
   });
   dlg.showModal();
-  input.focus();
+
+  try {
+    const res = await api('GET', `/api/team-members?branchId=${encodeURIComponent(state.branchId)}`, null, 'Cargar cajeros');
+    members = res.members;
+    if (!res.available) {
+      listEl.innerHTML = `<div class="note small">${esc(res.reason)}</div>`;
+      dlg.querySelector('#manual-actor').open = true;
+      return;
+    }
+    renderMembers();
+    dlg.querySelector('#member-search').focus();
+  } catch (err) {
+    listEl.innerHTML = `<div class="note small">No se pudo cargar el equipo: ${esc(friendlyError(err).message)}</div>`;
+    dlg.querySelector('#manual-actor').open = true;
+  }
 }
 
 // ------------------------------------------------------------------ conectar con una API key
@@ -712,10 +771,6 @@ function openConnectDialog() {
       </select>
     </label>
     <label class="field">API key<input name="apiKey" type="password" placeholder="mk_live_…" required /></label>
-    <label class="field">Usuario operador en Morsis (actorUserId)
-      <input name="actorUserId" required placeholder="09af74bb-63d8-47f2-8849-d66fe2b98f37" value="${esc(state.config.actorUserId || '')}" />
-      <span class="field-error" id="actor-error"></span>
-    </label>
     <label class="field">ID de tu caja (externalDeviceId)<input name="externalDeviceId" value="${esc(state.config.externalDeviceId)}" /></label>
     <div class="buttons">
       <button type="button" class="btn ghost" id="dlg-close">Cancelar</button>
@@ -726,21 +781,13 @@ function openConnectDialog() {
   dlg.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
-    const actor = String(form.get('actorUserId')).trim();
-    if (!UUID_RE.test(actor)) {
-      dlg.querySelector('#actor-error').textContent = actor
-        ? 'Tiene que ser un UUID, por ejemplo 09af74bb-63d8-47f2-8849-d66fe2b98f37.'
-        : 'Falta el usuario operador. Sin él, Morsis no deja modificar ni cobrar pedidos.';
-      return dlg.querySelector('[name=actorUserId]').focus();
-    }
-    form.set('actorUserId', actor);
     const btn = dlg.querySelector('#connect-submit');
     btn.disabled = true;
     btn.textContent = 'Probando la key…';
     try {
       const res = await api('POST', '/api/session/connect', Object.fromEntries(form), 'Conectar con API key');
       dlg.close();
-      toast('success', 'Conectado a Morsis', `La key funciona: ${res.branches.length} sucursales disponibles.`);
+      toast('success', 'Conectado a Morsis', `La key funciona: ${res.branches.length} sucursales disponibles. Ahora elegí el cajero.`);
       setTimeout(() => location.reload(), 900);
     } catch (err) {
       btn.disabled = false;

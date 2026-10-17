@@ -40,12 +40,12 @@ npm test   # recorre el flujo completo contra el Morsis simulado
 
 1. Pedile al comercio una **API key** de la API pública (Morsis → Integraciones → API pública) con
    los scopes `branches:read`, `orders:read`, `orders:write`, `orders:complete_external`,
-   `orders:refund_external` y `payment_methods:read`, y acceso a la sucursal.
-2. Pedí también el **usuario de Morsis** creado para tus operadores (`actorUserId`). Tiene que tener
-   `orders:edit` para cobrar y `orders:void` para devolver o anular.
-   La API pública no tiene un método para listar usuarios, así que este UUID lo pasa el comercio
-   desde Morsis. En la app se carga en **Cajero y caja** (botón "Cambiar" del encabezado), junto con
-   el ID de la caja, y se puede cambiar en cualquier momento.
+   `orders:refund_external`, `payment_methods:read` y `team:read`, y acceso a la sucursal.
+2. El **cajero** (`actorUserId`) es un usuario del equipo de Morsis. La app los trae con
+   `GET /v1/team/members` y los muestra en **Cajero y caja** (botón "Cambiar" del encabezado),
+   filtrados por la sucursal elegida. Se usa el `userId` del miembro, no su `id`. Tiene que tener
+   `orders:edit` para cobrar y `orders:void` para devolver o anular. Si la key no tiene `team:read`,
+   el mismo recuadro deja pegar el UUID a mano.
 3. Copiá `.env.example` a `.env` y completalo:
 
    ```bash
@@ -57,15 +57,15 @@ npm test   # recorre el flujo completo contra el Morsis simulado
    | `MORSIS_API_KEY` | Clave de la API. **Nunca** la subas al repo ni la mandes al navegador. |
    | `MORSIS_BASE_URL` | `https://api-staging.morsis.com/v1` (pruebas) o `https://api.morsis.com/v1` |
    | `MORSIS_BRANCH_ID` | Sucursal donde se presentan los cupones (si no, se elige en pantalla) |
-   | `MORSIS_ACTOR_USER_ID` | Usuario de Morsis del operador |
+   | `MORSIS_ACTOR_USER_ID` | Cajero por defecto (opcional: se puede elegir en pantalla) |
    | `EXTERNAL_DEVICE_ID` | ID de tu caja / terminal |
    | `INVOICE_*` | CUIT, razón social, tipo de comprobante y punto de venta con los que factura tu sistema |
 
 4. `npm start`. El encabezado muestra **MODO REAL** y la URL contra la que trabaja.
 
 **Atajo para probar en el momento:** sin tocar el `.env`, arrancá con `npm start`, tocá
-**Conectar con API key**, elegí staging o producción y pegá la key y el `actorUserId`. La app
-valida la key leyendo las sucursales y pasa a modo real. La key va solo al servidor local y queda en
+**Conectar con API key**, elegí staging o producción y pegá la key. La app
+valida la key leyendo las sucursales, pasa a modo real y te pide elegir el cajero. La key va solo al servidor local y queda en
 memoria hasta que lo cierres (o hasta tocar **Desconectar**). Por eso el servidor escucha solo en
 `127.0.0.1`; cambialo con `HOST` únicamente si sabés lo que hacés.
 
@@ -98,6 +98,16 @@ test/flow.test.js    El flujo completo como test.
 
 Todas las llamadas llevan `Authorization: Bearer <API key>`. Los montos son **enteros en centavos**
 de ARS (`250000` = $ 2.500,00).
+
+### 0. Elegir el cajero
+
+```http
+GET /v1/team/members?limit=100        # scope team:read; seguí meta.cursor mientras meta.hasMore
+```
+
+Cada miembro trae `userId`, `name`, `email`, `role`, `jobTitle` y `branchIds` (`null` = todas las
+sucursales). Mostrá los que tienen acceso a la sucursal y guardá el `userId` elegido: es el
+`actorUserId` de todos los comandos (ver `listCashiers` en `src/integration.js`).
 
 ### 1. Escanear el cupón y traer el pedido
 
