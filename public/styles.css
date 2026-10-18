@@ -147,8 +147,8 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--accent); ou
 .btn {
   font: inherit; font-weight: 600; border-radius: 10px; padding: 9px 16px; cursor: pointer;
   border: 1px solid var(--border); background: var(--surface); color: var(--text); transition: transform .05s, opacity .2s;
-a.btn { display: inline-block; text-decoration: none; }
 }
+a.btn { display: inline-block; text-decoration: none; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -324,3 +324,20 @@ body.is-busy { cursor: progress; }
 @media (prefers-reduced-motion: reduce) {
   .top-progress::before, .sale-progress::before, .icon-btn.loading::after, .btn.loading::after { animation-duration: 2.5s; }
 }
+
+/* Cupones pendientes de cobro */
+.pending { margin-top: 14px; }
+.pending-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pending-list { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; transition: opacity .2s; }
+.pending-list.loading { opacity: .55; }
+.pending-item {
+  width: 100%; display: grid; grid-template-columns: auto 1fr auto auto; gap: 10px; align-items: center;
+  font: inherit; text-align: left; padding: 8px 10px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+}
+.pending-item span { white-space: nowrap; }
+.pending-item:hover { border-color: var(--accent); }
+.pending-item.current { border-color: var(--accent); box-shadow: inset 3px 0 0 var(--accent); }
+.pending-item code { font-weight: 600; letter-spacing: .04em; }
+body.is-busy .pending-item { cursor: progress; }
+@media (max-width: 520px) { .pending-item { grid-template-columns: 1fr auto; } }

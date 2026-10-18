@@ -43,6 +43,35 @@ export async function listCashiers(morsis, branchId) {
 // ------------------------------------------------------------------ 1. cupón → venta
 
 /**
+ * Cupones pendientes de cobro en una sucursal: pedidos con cupón, impagos y no cancelados,
+ * del más nuevo al más viejo. Sirve para elegir el cupón de una lista en vez de escanearlo.
+ * Devuelve solo la primera página ({ coupons, total, hasMore }); para seguir, usá meta.cursor.
+ */
+export async function listPendingCoupons(morsis, branchId, { limit = 20 } = {}) {
+  const { data, meta } = await morsis.listOrders({
+    branchId,
+    hasPaymentCoupon: true,
+    paymentStatus: ['unpaid'],
+    preparationStatus: ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'in_table'],
+    limit,
+  });
+  return {
+    coupons: data
+      .filter((o) => o.paymentCoupon?.code)
+      .map((o) => ({
+        code: o.paymentCoupon.code,
+        orderId: o.id,
+        orderNumber: o.orderNumber,
+        totalCents: o.totalCents,
+        preparationStatus: o.preparationStatus,
+        createdAt: o.createdAt,
+      })),
+    total: meta?.total ?? data.length,
+    hasMore: Boolean(meta?.hasMore),
+  };
+}
+
+/**
  * Busca el pedido del cupón y lo convierte en una venta del POS.
  * Devuelve { order, sale } o lanza un error con code COUPON_NOT_FOUND.
  */

@@ -141,6 +141,20 @@ GET /v1/orders?paymentCouponCode=012345678&branchId=55555555-5555-4555-8555-5555
 
 Para releer un pedido que ya tenés: `GET /v1/orders/{orderId}`.
 
+**Opcional: elegir el cupón de una lista.** Si el cajero no tiene el cupón a mano, tu sistema puede
+listar los pedidos impagos de la sucursal y dejarlo elegir:
+
+```http
+GET /v1/orders?branchId=<uuid>&hasPaymentCoupon=true&paymentStatus=unpaid&preparationStatus=pending,confirmed,preparing,ready,completed,in_table&limit=20
+```
+
+- Sin `paymentCouponCode`, la respuesta trae **resúmenes** (`id`, `orderNumber`, `paymentCoupon`,
+  `totalCents`, estados y fechas), del más nuevo al más viejo. No traen líneas ni `version`: al
+  elegir uno, buscalo por su cupón (o con `GET /v1/orders/{id}`) como en el paso normal.
+- Paginación: `meta.cursor` / `meta.hasMore`, con los mismos filtros; `meta.total` cuenta todos.
+- `hasPaymentCoupon=true` también incluye pedidos ya cobrados o cancelados: por eso se combina con
+  `paymentStatus=unpaid` y se excluye `cancelled`.
+
 ### Paso 2. Cargar el pedido como venta propia
 
 Campos del pedido que te importan:

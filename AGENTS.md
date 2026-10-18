@@ -60,6 +60,7 @@ que ve el cajero van en el idioma del sistema destino.
 | Cajeros | `GET /team/members?limit=100[&cursor=][&query=]` → `{data, meta:{cursor, hasMore}}` | `team:read` |
 | Medios de cobro | `GET /payment-methods` | `payment_methods:read` |
 | Buscar por cupón | `GET /orders?paymentCouponCode={code}&branchId={id}` → `data` con 0 o 1 pedido | `orders:read` |
+| Cupones pendientes (opcional) | `GET /orders?branchId={id}&hasPaymentCoupon=true&paymentStatus=unpaid&preparationStatus=pending,confirmed,preparing,ready,completed,in_table&limit=20` → resúmenes sin líneas ni `version`; paginar con `meta.cursor` | `orders:read` |
 | Releer | `GET /orders/{orderId}` | `orders:read` |
 | Quitar línea | `POST /orders/{orderId}/item-removals` `{…ctx, lineItemId}` | `orders:write` |
 | Cambiar cantidad | `PATCH /orders/{orderId}/items/{lineItemId}` `{…ctx, quantity>=1}` | `orders:write` |
@@ -154,6 +155,7 @@ Pago: `morsis_payment_id`. Operaciones de devolución/anulación: su propio `ext
 - No reuses una `Idempotency-Key` con otro body, ni generes una nueva al reintentar.
 - No reintentes a ciegas un `409 ORDER_VERSION_CONFLICT`.
 - No inventes endpoints (no hay webhooks de pedidos ni endpoint para anular pedidos impagos).
+- No uses un resumen de la lista de pedidos para comandos: no trae `version` ni líneas; leé el pedido completo primero.
 - No asumas que todas las líneas son editables (`lineItemId: null`, combos, líneas ya en cocina).
 
 ## Criterios de aceptación

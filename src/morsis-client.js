@@ -78,6 +78,23 @@ export class MorsisClient {
     return res.data[0] ?? null;
   }
 
+  /**
+   * GET /orders con filtros (sin paymentCouponCode): una página de resúmenes de pedidos
+   * (OrderSummary: id, orderNumber, paymentCoupon, totalCents, estados, fechas; sin líneas ni version).
+   * Devuelve { data, meta: { cursor, hasMore, total } }. Para la página siguiente pasá
+   * `cursor: meta.cursor` con los mismos filtros. Los estados van como arrays (se mandan separados por coma).
+   * Ejemplo, cupones impagos de una sucursal:
+   *   listOrders({ branchId, hasPaymentCoupon: true, paymentStatus: ['unpaid'] })
+   */
+  async listOrders(filters = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null) continue;
+      params.set(key, Array.isArray(value) ? value.join(',') : String(value));
+    }
+    return this.#request('GET', `/orders?${params}`);
+  }
+
   /** GET /orders/{orderId}: relee el pedido (por ejemplo después de un 409). */
   async getOrder(orderId) {
     return (await this.#request('GET', `/orders/${orderId}`)).data;

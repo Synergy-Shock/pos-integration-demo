@@ -88,6 +88,13 @@ function seedOrders() {
   ];
 }
 
+// Proyección OrderSummary que devuelve GET /orders cuando se lista sin cupón.
+function summary(o) {
+  const keys = ['id', 'orderNumber', 'branchId', 'paymentCoupon', 'currency', 'totalCents', 'preparationStatus',
+    'fulfillmentStatus', 'paymentStatus', 'createdAt', 'completedAt', 'cancelledAt'];
+  return clone(Object.fromEntries(keys.map((k) => [k, o[k]])));
+}
+
 function line(name, sku, quantity, priceCents, taxRate, options = [], notes = null) {
   return { lineItemId: randomUUID(), productId: randomUUID(), sku, name, quantity, priceCents, taxRate, weightKg: null, notes, options };
 }
@@ -213,6 +220,33 @@ export class MockMorsis {
       return { data: clone(found), meta: { cursor: found.at(-1)?.id ?? null, hasMore: false, total: found.length } };
     });
     return res.data[0] ?? null;
+  }
+
+  async listOrders(filters = {}) {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(filters)) {
+      if (value !== undefined && value !== null) params.set(key, Array.isArray(value) ? value.join(',') : String(value));
+    }
+    return this.#call('GET', `/orders?${params}`, {}, () => {
+      const list = (key) => (params.get(key) ? params.get(key).split(',') : null);
+      const prep = list('preparationStatus');
+      const pay = list('paymentStatus');
+      const hasCoupon = params.get('hasPaymentCoupon');
+      const limit = Math.min(Number(params.get('limit')) || 50, 100);
+      const matching = this.orders
+        .filter((o) => !params.get('branchId') || o.branchId === params.get('branchId'))
+        .filter((o) => hasCoupon === null || (hasCoupon === 'true') === Boolean(o.paymentCoupon))
+        .filter((o) => !prep || prep.includes(o.preparationStatus))
+        .filter((o) => !pay || pay.includes(o.paymentStatus))
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id));
+      const start = params.get('cursor') ? Number(params.get('cursor')) : 0;
+      const page = matching.slice(start, start + limit);
+      const hasMore = start + limit < matching.length;
+      return {
+        data: page.map(summary),
+        meta: { cursor: hasMore ? String(start + limit) : null, hasMore, total: matching.length },
+      };
+    });
   }
 
   async getOrder(orderId) {

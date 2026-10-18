@@ -56,7 +56,15 @@
         <div class="scanner-help">
           <p>El cajero escanea el código de barras del cupón. El POS busca el pedido en Morsis con
             <code>GET /orders?paymentCouponCode=…&amp;branchId=…</code> y lo carga como una venta propia.</p>
-          <div id="sample-coupons" class="chips"></div>
+          <div class="pending">
+            <div class="pending-head">
+              <strong>Cupones pendientes de cobro</strong>
+              <button class="btn ghost small" id="pending-refresh" type="button" title="Volver a pedir la lista a Morsis">Actualizar</button>
+            </div>
+            <p class="muted small">Pedidos impagos con cupón en esta sucursal, con
+              <code>GET /orders?hasPaymentCoupon=true&amp;paymentStatus=unpaid&amp;branchId=…</code>. Tocá uno para cargarlo.</p>
+            <ul id="pending-coupons" class="pending-list" aria-live="polite"></ul>
+          </div>
         </div>
       </div>
 

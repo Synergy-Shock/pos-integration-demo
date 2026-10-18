@@ -87,3 +87,15 @@ test('cajeros: solo los que tienen acceso a la sucursal', async () => {
   assert.ok(!names.includes('Diego Torres')); // solo Palermo
   assert.match(centro[0].userId, /^[0-9a-f-]{36}$/);
 });
+
+test('cupones pendientes: solo impagos de la sucursal, y el cobrado sale de la lista', async () => {
+  const morsis = new MockMorsis();
+  let res = await integration.listPendingCoupons(morsis, BRANCH);
+  assert.deepEqual(res.coupons.map((c) => c.code).sort(), ['000000777', '012345678']);
+  assert.equal(res.total, 2);
+
+  const { order } = await integration.importSaleFromCoupon(morsis, { couponCode: '000000777', branchId: BRANCH });
+  await integration.completeSale(morsis, config, order, { payments: cash(order.totalCents) });
+  res = await integration.listPendingCoupons(morsis, BRANCH);
+  assert.deepEqual(res.coupons.map((c) => c.code), ['012345678']);
+});

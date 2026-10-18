@@ -50,7 +50,6 @@ const routes = [
     actorName: config.actorName,
     canConnect: true,
     invoice: config.invoice,
-    sampleCoupons: config.mode === 'mock' ? ['012345678', '000000777', '123456789'] : [],
   })],
 
   // Conectar con una API key pegada en la pantalla. Se valida leyendo las sucursales.
@@ -99,6 +98,20 @@ const routes = [
           members: [],
           reason: 'La API key no puede leer el equipo (le falta el permiso team:read). Pedile al comercio que lo agregue, o ingresá el ID de usuario a mano.',
         };
+      }
+      throw err;
+    }
+  }],
+
+  // Cupones impagos de la sucursal, para elegirlos de una lista sin entrar a Morsis.
+  ['GET', /^\/api\/pending-coupons$/, async ({ query }) => {
+    const branchId = query.get('branchId') || config.branchId;
+    if (!branchId) return { available: false, coupons: [], reason: 'Elegí una sucursal.' };
+    try {
+      return { available: true, ...(await integration.listPendingCoupons(morsis, branchId)) };
+    } catch (err) {
+      if (err instanceof MorsisApiError && err.status === 403) {
+        return { available: false, coupons: [], reason: 'La API key no puede listar pedidos de esta sucursal (revisá orders:read y el acceso a la sucursal).' };
       }
       throw err;
     }

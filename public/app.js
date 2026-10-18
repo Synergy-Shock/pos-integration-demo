@@ -131,18 +131,14 @@ async function init() {
   connectBtn.textContent = config.mode === 'real' ? 'Desconectar' : 'Conectar con API key';
   connectBtn.addEventListener('click', () => (state.config.mode === 'real' ? disconnect() : openConnectDialog()));
 
-  const chips = $('#sample-coupons');
-  if (config.sampleCoupons.length) {
-    chips.innerHTML = `<span class="muted small">Cupones de prueba:</span>` +
-      config.sampleCoupons.map((c) => `<button class="chip" data-coupon="${c}">${c}</button>`).join('');
-    chips.addEventListener('click', (e) => {
-      const c = e.target.dataset.coupon;
-      if (!c) return;
-      $('#coupon-input').value = c;
-      renderBarcode(c);
-      scan();
-    });
-  }
+  $('#pending-coupons').addEventListener('click', (e) => {
+    const c = e.target.closest('[data-coupon]')?.dataset.coupon;
+    if (!c || state.busy) return;
+    $('#coupon-input').value = c;
+    renderBarcode(c);
+    scan();
+  });
+  $('#pending-refresh').addEventListener('click', () => loadPendingCoupons());
 
   try {
     const { branches } = await api('GET', '/api/branches', null, 'Cargar sucursales');
@@ -150,7 +146,10 @@ async function init() {
     select.innerHTML = branches.map((b) => `<option value="${b.id}">${esc(b.displayName || b.name)}</option>`).join('');
     if (state.branchId && branches.some((b) => b.id === state.branchId)) select.value = state.branchId;
     state.branchId = select.value;
-    select.addEventListener('change', () => (state.branchId = select.value));
+    select.addEventListener('change', () => {
+      state.branchId = select.value;
+      loadPendingCoupons();
+    });
   } catch (err) {
     showError(err);
   }
@@ -163,6 +162,7 @@ async function init() {
 
   renderBarcode('');
   renderStepper();
+  loadPendingCoupons();
   // Recién conectado en modo real y sin cajero elegido: lo pedimos de entrada.
   if (config.mode === 'real' && !config.actorUserId) openOperatorDialog();
   $('#coupon-input').addEventListener('input', (e) => {
@@ -205,6 +205,41 @@ async function scan() {
   });
 }
 
+// Lista de cupones impagos de la sucursal (GET /orders con filtros). Se recarga al cambiar de
+// sucursal, al tocar "Actualizar" y después de cada cambio de estado de una venta.
+async function loadPendingCoupons() {
+  const list = $('#pending-coupons');
+  if (!state.branchId) return (list.innerHTML = '<li class="muted small">Elegí una sucursal.</li>');
+  list.classList.add('loading');
+  if (!list.children.length) list.innerHTML = [1, 2, 3].map(() => '<li><div class="skeleton"></div></li>').join('');
+  try {
+    const res = await api('GET', `/api/pending-coupons?branchId=${encodeURIComponent(state.branchId)}`, null, 'Listar cupones pendientes');
+    if (!res.available) {
+      list.innerHTML = `<li class="muted small">${esc(res.reason)}</li>`;
+    } else if (!res.coupons.length) {
+      list.innerHTML = '<li class="muted small">No hay cupones pendientes en esta sucursal.</li>';
+    } else {
+      list.innerHTML =
+        res.coupons
+          .map(
+            (c) => `<li><button type="button" class="pending-item${c.code === state.order?.paymentCoupon?.code ? ' current' : ''}" data-coupon="${esc(c.code)}">
+              <code>${esc(c.code)}</code>
+              <span>Pedido #${esc(c.orderNumber ?? '—')}</span>
+              <span class="muted small">${esc(new Date(c.createdAt).toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' }))}</span>
+              <strong>${fmt(c.totalCents)}</strong>
+            </button></li>`,
+          )
+          .join('') +
+        (res.hasMore ? `<li class="muted small">Se muestran ${res.coupons.length} de ${res.total}. Escaneá el cupón si no está en la lista.</li>` : '');
+    }
+  } catch (err) {
+    list.innerHTML = '<li class="muted small">No se pudo traer la lista. Podés escanear o tipear el cupón.</li>';
+    showError(err);
+  } finally {
+    list.classList.remove('loading');
+  }
+}
+
 function showSaleSkeleton() {
   const sale = $('#sale');
   sale.classList.remove('hidden');
@@ -219,7 +254,12 @@ function showSaleSkeleton() {
 }
 
 function setOrder(order, opts = {}) {
+  const prev = state.order;
   state.order = order;
+  // Un cupón entra o sale de la lista de pendientes cuando cambia de pedido o de estado.
+  if (!prev || prev.id !== order.id || prev.paymentStatus !== order.paymentStatus || prev.preparationStatus !== order.preparationStatus) {
+    loadPendingCoupons();
+  }
   renderSale(order, opts);
   renderStepper();
   $('#raw-json').textContent = JSON.stringify(order, null, 2);
